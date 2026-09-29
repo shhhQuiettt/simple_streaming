@@ -16,6 +16,8 @@ from gi.repository import Gst, GstWebRTC, GstSdp, GLib
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("webrtc-server")
 
+import argparse
+
 # -------------------------------------------------------------------------
 # X11 Window Discovery
 # -------------------------------------------------------------------------
@@ -38,24 +40,22 @@ def find_window_id(title_substring):
 # -------------------------------------------------------------------------
 # GStreamer Pipeline Configuration
 # -------------------------------------------------------------------------
-def create_pipeline_string(xid):
+def create_pipeline_string(xid, codec="h264"):
     """
     Creates the GStreamer pipeline string for capturing an X11 window.
-    
-    The encoder section is isolated so it can easily be swapped out for 
-    hardware encoding (e.g., nvv4l2h264enc on Jetson).
     """
     
     # 1. Capture stage
     capture = f"ximagesrc xid={xid} use-damage=0 ! video/x-raw,framerate=30/1 ! videoconvert ! queue max-size-buffers=1 leaky=downstream"
     
-    # 2. Encoder stage (Software H.264 - zero latency preset)
-    # To switch to NVIDIA Jetson hardware encoding, you would replace this block with:
-    # encoder = "nvvidconv ! nvv4l2h264enc insert-sps-pps=true maxperf-enable=true bitrate=2500000 ! rtph264pay"
-    encoder = "x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph264pay config-interval=-1 aggregate-mode=zero-latency"
-    
-    # 3. Payload format (Matches the encoder output)
-    caps = "application/x-rtp,media=video,encoding-name=H264,payload=96"
+    if codec == "h265":
+        encoder = "x265enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph265pay config-interval=-1 aggregate-mode=zero-latency"
+        caps = "application/x-rtp,media=video,encoding-name=H265,payload=96"
+    else:
+        # 2. Encoder stage (Software H.264 - zero latency preset)
+        encoder = "x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph264pay config-interval=-1 aggregate-mode=zero-latency"
+        # 3. Payload format (Matches the encoder output)
+        caps = "application/x-rtp,media=video,encoding-name=H264,payload=96"
     
     # Complete pipeline
     return f"{capture} ! {encoder} ! {caps} ! webrtcbin name=webrtcbin"
@@ -64,15 +64,16 @@ def create_pipeline_string(xid):
 # WebRTC Session Manager
 # -------------------------------------------------------------------------
 class WebRTCClientSession:
-    def __init__(self, websocket, window_id, loop):
+    def __init__(self, websocket, window_id, loop, codec):
         self.ws = websocket
         self.window_id = window_id
         self.loop = loop
+        self.codec = codec
         self.pipeline = None
         self.webrtcbin = None
 
     def start(self):
-        pipeline_str = create_pipeline_string(self.window_id)
+        pipeline_str = create_pipeline_string(self.window_id, self.codec)
         logger.info(f"Starting pipeline: {pipeline_str}")
         self.pipeline = Gst.parse_launch(pipeline_str)
         self.webrtcbin = self.pipeline.get_by_name('webrtcbin')
@@ -143,11 +144,12 @@ class WebRTCClientSession:
 clients = set()
 window_id_target = None
 main_loop = None
+selected_codec = "h264"
 
 async def signaling_handler(websocket):
     logger.info("Viewer connected")
     clients.add(websocket)
-    session = WebRTCClientSession(websocket, window_id_target, main_loop)
+    session = WebRTCClientSession(websocket, window_id_target, main_loop, selected_codec)
     session.start()
 
     try:
@@ -177,13 +179,15 @@ async def run_server(host, port):
         await asyncio.Future()  # run forever
 
 def main():
-    global window_id_target
+    global window_id_target, selected_codec
     
-    if len(sys.argv) < 2:
-        print("Usage: python3 server.py <window_title_substring>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="X11 Window WebRTC Streamer")
+    parser.add_argument("title", help="Substring of the window title to match")
+    parser.add_argument("--codec", choices=["h264", "h265"], default="h264", help="Video codec to use (default: h264)")
+    args = parser.parse_args()
 
-    target_title = sys.argv[1]
+    target_title = args.title
+    selected_codec = args.codec
     
     Gst.init(None)
     

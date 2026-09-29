@@ -49,6 +49,11 @@ Provide a substring of the title of the window you want to capture.
 chmod +x run-server.sh
 ./run-server.sh "brave"
 ```
+You can also choose H.265 compression if your browser (like Safari) supports it:
+```bash
+./run-server.sh "brave" --codec h265
+```
+
 The server will find the window and start listening for WebRTC connections on `ws://0.0.0.0:8081`.
 
 ### 2. Start the Client

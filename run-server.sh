@@ -3,9 +3,9 @@
 # Exit on error
 set -e
 
-if [ "$#" -ne 1 ]; then
-    echo "Usage: ./run-server.sh <window_title_substring>"
-    echo "Example: ./run-server.sh brave"
+if [ "$#" -lt 1 ]; then
+    echo "Usage: ./run-server.sh <window_title_substring> [--codec h264|h265]"
+    echo "Example: ./run-server.sh brave --codec h265"
     exit 1
 fi
 
@@ -20,4 +20,4 @@ fi
 uv pip install -r server/requirements.txt
 
 # Run the server
-uv run python server/server.py "$1"
+uv run python server/server.py "$@"
