@@ -49,14 +49,13 @@ def create_pipeline_string(xid):
     # 1. Capture stage
     capture = f"ximagesrc xid={xid} use-damage=0 ! video/x-raw,framerate=30/1 ! videoconvert ! queue max-size-buffers=1 leaky=downstream"
     
-    # 2. Encoder stage (Software VP8 - excellent WebRTC compatibility and low latency)
+    # 2. Encoder stage (Software H.264 - zero latency preset)
     # To switch to NVIDIA Jetson hardware encoding, you would replace this block with:
     # encoder = "nvvidconv ! nvv4l2h264enc insert-sps-pps=true maxperf-enable=true bitrate=2500000 ! rtph264pay"
-    encoder = "vp8enc deadline=1 cpu-used=4 keyframe-max-dist=30 target-bitrate=2500000 ! rtpvp8pay"
+    encoder = "x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph264pay config-interval=-1 aggregate-mode=zero-latency"
     
     # 3. Payload format (Matches the encoder output)
-    # If using H264 on Jetson, this would be: application/x-rtp,media=video,encoding-name=H264,payload=96
-    caps = "application/x-rtp,media=video,encoding-name=VP8,payload=96"
+    caps = "application/x-rtp,media=video,encoding-name=H264,payload=96"
     
     # Complete pipeline
     return f"{capture} ! {encoder} ! {caps} ! webrtcbin name=webrtcbin"

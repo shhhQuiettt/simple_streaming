@@ -73,6 +73,8 @@ function setupWebRTC() {
         if (videoEl.srcObject !== event.streams[0]) {
             videoEl.srcObject = event.streams[0];
             console.log("Attached video stream");
+            // Force playback in case the browser blocks autoplay despite the attributes
+            videoEl.play().catch(e => console.log("Auto-play prevented (needs user interaction):", e));
         }
     };
 

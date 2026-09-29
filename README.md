@@ -10,7 +10,7 @@ The system consists of two parts:
    - Uses `wmctrl` to discover the X11 window ID from a title substring.
    - Sets up a GStreamer pipeline using `ximagesrc` for capture and `webrtcbin` for streaming.
    - Hosts a WebSocket server (`websockets`) on port 8081 for WebRTC signaling (SDP/ICE exchange).
-   - Encodes the video. By default, it uses software encoding (`vp8enc`) for maximum WebRTC compatibility and simplicity, optimized for zero latency.
+   - Encodes the video. By default, it uses software encoding (`x264enc`) tuned for zero latency. H.264 makes it extremely easy to transition to hardware encoding on Jetson later.
 
 2. **Web Client** (`client/`):
    - A plain HTML/CSS/JS frontend served via Python's built-in `http.server` on port 8080.
@@ -64,7 +64,7 @@ The video should connect and autoplay.
 
 ## Upgrading to Jetson Hardware Encoding
 
-The pipeline in `server/server.py` is modular. The software VP8 encoder is currently active. 
+The pipeline in `server/server.py` is modular. The software H.264 encoder is currently active.
 
 To switch to NVIDIA Jetson AGX Orin hardware encoding:
 1. Ensure the `nvvideo4linux2` GStreamer plugin is installed (comes with JetPack).
