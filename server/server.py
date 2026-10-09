@@ -45,15 +45,30 @@ def create_pipeline_string(xid, codec="h264"):
     Creates the GStreamer pipeline string for capturing an X11 window.
     """
     
+    # Check GStreamer version to support older versions (like JetPack 5 / Ubuntu 20.04)
+    gst_version = Gst.version()
+    supports_aggregate = (gst_version[0] > 1 or (gst_version[0] == 1 and gst_version[1] >= 18))
+    agg_str = " aggregate-mode=zero-latency" if supports_aggregate else ""
+    
     # 1. Capture stage
     capture = f"ximagesrc xid={xid} use-damage=0 ! video/x-raw,framerate=30/1 ! videoconvert ! queue max-size-buffers=1 leaky=downstream"
     
     if codec == "h265":
-        encoder = "x265enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph265pay config-interval=-1 aggregate-mode=zero-latency"
+        if Gst.ElementFactory.find('nvv4l2h265enc'):
+            # NVIDIA Hardware H.265 (Jetson)
+            # Need nvvidconv to copy system memory to NVMM memory
+            encoder = f"video/x-raw,format=I420 ! nvvidconv ! nvv4l2h265enc insert-sps-pps=true idrinterval=30 maxperf-enable=1 bitrate=2500000 ! rtph265pay config-interval=-1{agg_str}"
+        else:
+            encoder = f"x265enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph265pay config-interval=-1{agg_str}"
         caps = "application/x-rtp,media=video,encoding-name=H265,payload=96"
     else:
-        # 2. Encoder stage (Software H.264 - zero latency preset)
-        encoder = "x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph264pay config-interval=-1 aggregate-mode=zero-latency"
+        if Gst.ElementFactory.find('nvv4l2h264enc'):
+            # NVIDIA Hardware H.264 (Jetson)
+            # Need nvvidconv to copy system memory to NVMM memory
+            encoder = f"video/x-raw,format=I420 ! nvvidconv ! nvv4l2h264enc insert-sps-pps=true idrinterval=30 maxperf-enable=1 bitrate=2500000 ! rtph264pay config-interval=-1{agg_str}"
+        else:
+            # 2. Encoder stage (Software H.264 - zero latency preset)
+            encoder = f"x264enc tune=zerolatency speed-preset=ultrafast key-int-max=30 bitrate=2500 ! rtph264pay config-interval=-1{agg_str}"
         # 3. Payload format (Matches the encoder output)
         caps = "application/x-rtp,media=video,encoding-name=H264,payload=96"
     
